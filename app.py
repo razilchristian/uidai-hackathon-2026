@@ -26,6 +26,26 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Initialize session state variables
+if 'data_loaded' not in st.session_state:
+    st.session_state.data_loaded = False
+if 'merged_df' not in st.session_state:
+    st.session_state.merged_df = None
+if 'enroll_df' not in st.session_state:
+    st.session_state.enroll_df = None
+if 'demo_df' not in st.session_state:
+    st.session_state.demo_df = None
+if 'bio_df' not in st.session_state:
+    st.session_state.bio_df = None
+if 'run_forecast' not in st.session_state:
+    st.session_state.run_forecast = False
+if 'run_anomaly' not in st.session_state:
+    st.session_state.run_anomaly = False
+if 'run_clustering' not in st.session_state:
+    st.session_state.run_clustering = False
+if 'run_optimization' not in st.session_state:
+    st.session_state.run_optimization = False
+
 # Custom CSS - Enhanced with modern design
 st.markdown("""
 <style>
@@ -174,16 +194,6 @@ st.markdown("""
     .feature-desc {
         color: #6B7280;
         font-size: 0.9rem;
-    }
-    
-    /* Loading animation */
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-    
-    .pulse {
-        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -495,7 +505,6 @@ with st.sidebar:
     if st.button("🔄 Load & Process Data", 
                  use_container_width=True,
                  type="primary"):
-        st.session_state.data_loaded = False
         with st.spinner("Processing..."):
             try:
                 merged_df, enroll_df, demo_df, bio_df = load_all_data()
@@ -522,7 +531,6 @@ with st.sidebar:
     if ml_option == "📈 Forecasting":
         with st.expander("🔧 Forecast Settings"):
             forecast_years = st.slider("Forecast Years", 1, 5, 3, help="Number of years to forecast")
-            confidence_level = st.slider("Confidence Interval", 80, 95, 80, help="Confidence level for predictions")
     
     elif ml_option == "👥 Clustering":
         with st.expander("🔧 Clustering Settings"):
@@ -530,20 +538,26 @@ with st.sidebar:
     
     st.divider()
     
-    # Data Filters
+    # Data Filters (only show if data is loaded)
     st.markdown("### 🔍 Filters")
-    if 'merged_df' in st.session_state:
+    if st.session_state.data_loaded and st.session_state.merged_df is not None:
         states = ["All States"] + list(st.session_state.merged_df['state'].unique())
         selected_state = st.selectbox("Select State", states)
         
         years = st.session_state.merged_df['year'].unique()
-        min_year, max_year = int(years.min()), int(years.max())
-        year_range = st.slider(
-            "Year Range",
-            min_value=min_year,
-            max_value=max_year,
-            value=(min_year, max_year)
-        )
+        if len(years) > 0:
+            min_year, max_year = int(years.min()), int(years.max())
+            if min_year < max_year:  # Only show slider if there's a range
+                year_range = st.slider(
+                    "Year Range",
+                    min_value=min_year,
+                    max_value=max_year,
+                    value=(min_year, max_year)
+                )
+            else:
+                st.info(f"Data from year: {min_year}")
+        else:
+            st.info("No year data available")
     
     st.divider()
     
@@ -562,10 +576,7 @@ with st.sidebar:
 # ===== MAIN CONTENT =====
 
 # Check if data is loaded
-if 'data_loaded' not in st.session_state:
-    st.session_state.data_loaded = False
-
-if not st.session_state.data_loaded:
+if not st.session_state.data_loaded or st.session_state.merged_df is None:
     # Welcome screen with enhanced design
     st.markdown('<div class="welcome-card">', unsafe_allow_html=True)
     st.markdown("### Welcome to UIDAI Analytics Platform")
@@ -637,45 +648,56 @@ st.markdown("## 📈 Key Performance Indicators")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.markdown("""
+    total_activities = merged_df['total_activities'].sum()
+    st.markdown(f"""
     <div class="metric-card">
         <div class="metric-label">Total Activities</div>
-        <div class="metric-value">{:,}</div>
+        <div class="metric-value">{total_activities:,.0f}</div>
         <div style="font-size: 0.8rem; color: #10B981;">↑ 12% from last month</div>
     </div>
-    """.format(merged_df['total_activities'].sum()), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 with col2:
     bio_ratio = merged_df['total_bio_updates'].sum() / max(merged_df['total_enrollment'].sum(), 1)
-    st.markdown("""
+    st.markdown(f"""
     <div class="metric-card">
         <div class="metric-label">Update Ratio</div>
-        <div class="metric-value">{:.1f}x</div>
+        <div class="metric-value">{bio_ratio:.1f}x</div>
         <div style="font-size: 0.8rem; color: #F59E0B;">Goal: 1.5x</div>
     </div>
-    """.format(bio_ratio), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 with col3:
-    top_state = merged_df.groupby('state')['total_bio_updates'].sum().idxmax()
-    top_state_count = merged_df.groupby('state')['total_bio_updates'].sum().max()
-    st.markdown("""
-    <div class="metric-card">
-        <div class="metric-label">Top State</div>
-        <div class="metric-value">{}</div>
-        <div style="font-size: 0.8rem; color: #3B82F6;">{:,} updates</div>
-    </div>
-    """.format(top_state, top_state_count), unsafe_allow_html=True)
+    top_state = merged_df.groupby('state')['total_bio_updates'].sum()
+    if not top_state.empty:
+        top_state_name = top_state.idxmax()
+        top_state_count = top_state.max()
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Top State</div>
+            <div class="metric-value">{top_state_name}</div>
+            <div style="font-size: 0.8rem; color: #3B82F6;">{top_state_count:,.0f} updates</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div class="metric-card">
+            <div class="metric-label">Top State</div>
+            <div class="metric-value">N/A</div>
+            <div style="font-size: 0.8rem; color: #6B7280;">No data available</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 with col4:
     anomaly_count = len(merged_df[merged_df['update_ratio'] > 100])
     trend = "⚠️" if anomaly_count > 0 else "✅"
-    st.markdown("""
+    st.markdown(f"""
     <div class="metric-card">
         <div class="metric-label">High Anomalies</div>
-        <div class="metric-value">{}</div>
-        <div style="font-size: 0.8rem; color: #EF4444;">{}</div>
+        <div class="metric-value">{anomaly_count}</div>
+        <div style="font-size: 0.8rem; color: #EF4444;">{trend}</div>
     </div>
-    """.format(anomaly_count, trend), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 # ===== MAIN CONTENT BASED ON SELECTION =====
 
@@ -749,27 +771,30 @@ if display_option == "📊 Overview":
     
     top_states = merged_df.groupby('state')['total_bio_updates'].sum().nlargest(10)
     
-    fig3 = go.Figure(go.Bar(
-        x=top_states.values,
-        y=top_states.index,
-        orientation='h',
-        marker_color='#1E3A8A',
-        text=[f"{x:,.0f}" for x in top_states.values],
-        textposition='outside',
-        hovertemplate='<b>%{y}</b><br>Updates: %{x:,}<extra></extra>'
-    ))
-    
-    fig3.update_layout(
-        title="Top 10 States by Biometric Updates",
-        xaxis_title="Number of Updates",
-        yaxis_title="State",
-        height=500,
-        margin=dict(t=50, b=20, l=20, r=20),
-        plot_bgcolor='rgba(0,0,0,0)',
-        yaxis={'categoryorder': 'total ascending'}
-    )
-    
-    st.plotly_chart(fig3, use_container_width=True)
+    if not top_states.empty:
+        fig3 = go.Figure(go.Bar(
+            x=top_states.values,
+            y=top_states.index,
+            orientation='h',
+            marker_color='#1E3A8A',
+            text=[f"{x:,.0f}" for x in top_states.values],
+            textposition='outside',
+            hovertemplate='<b>%{y}</b><br>Updates: %{x:,}<extra></extra>'
+        ))
+        
+        fig3.update_layout(
+            title="Top 10 States by Biometric Updates",
+            xaxis_title="Number of Updates",
+            yaxis_title="State",
+            height=500,
+            margin=dict(t=50, b=20, l=20, r=20),
+            plot_bgcolor='rgba(0,0,0,0)',
+            yaxis={'categoryorder': 'total ascending'}
+        )
+        
+        st.plotly_chart(fig3, use_container_width=True)
+    else:
+        st.info("No state data available for visualization")
 
 elif display_option == "📈 Forecasting":
     st.markdown("## 📈 Biometric Update Forecast")
@@ -779,7 +804,7 @@ elif display_option == "📈 Forecasting":
         if st.button("🚀 Train Model", type="primary", use_container_width=True):
             st.session_state.run_forecast = True
     
-    if 'run_forecast' in st.session_state and st.session_state.run_forecast:
+    if st.session_state.run_forecast:
         try:
             with st.spinner("Training model..."):
                 model, forecast, ts_data = train_forecast_model(merged_df, forecast_years)
@@ -820,7 +845,7 @@ elif display_option == "🚨 Anomaly Detection":
         if st.button("🔍 Detect Anomalies", type="primary", use_container_width=True):
             st.session_state.run_anomaly = True
     
-    if 'run_anomaly' in st.session_state and st.session_state.run_anomaly:
+    if st.session_state.run_anomaly:
         try:
             with st.spinner("Analyzing data for anomalies..."):
                 merged_df = detect_anomalies(merged_df)
@@ -836,8 +861,11 @@ elif display_option == "🚨 Anomaly Detection":
                 with col2:
                     st.metric("Highest Update Ratio", f"{anomalies['update_ratio'].max():.0f}x")
                 with col3:
-                    top_anomaly_state = anomalies['state'].mode()[0] if len(anomalies['state'].mode()) > 0 else "N/A"
-                    st.metric("Most Anomalous State", top_anomaly_state)
+                    if not anomalies['state'].empty:
+                        top_anomaly_state = anomalies['state'].mode()[0] if len(anomalies['state'].mode()) > 0 else "N/A"
+                        st.metric("Most Anomalous State", top_anomaly_state)
+                    else:
+                        st.metric("Most Anomalous State", "N/A")
                 
                 # Anomalies visualization
                 tab1, tab2 = st.tabs(["🗺️ Distribution", "📋 Details"])
@@ -877,7 +905,7 @@ elif display_option == "👥 Clustering":
         if st.button("🎯 Cluster Districts", type="primary", use_container_width=True):
             st.session_state.run_clustering = True
     
-    if 'run_clustering' in st.session_state and st.session_state.run_clustering:
+    if st.session_state.run_clustering:
         try:
             with st.spinner(f"Clustering districts into {n_clusters} groups..."):
                 merged_df = cluster_districts(merged_df, n_clusters)
@@ -904,7 +932,7 @@ elif display_option == "👥 Clustering":
                     'total_enrollment': 'mean',
                     'total_bio_updates': 'mean',
                     'update_ratio': 'mean',
-                    'state': lambda x: ', '.join(x.mode()[:3])
+                    'state': lambda x: ', '.join(x.mode()[:3]) if not x.mode().empty else "N/A"
                 }).round(2)
                 
                 cluster_stats.columns = ['Avg Enrollment', 'Avg Bio Updates', 'Avg Update Ratio', 'Common States']
@@ -944,7 +972,7 @@ elif display_option == "🎯 Optimization":
         if st.button("⚙️ Optimize Resources", type="primary", use_container_width=True):
             st.session_state.run_optimization = True
     
-    if 'run_optimization' in st.session_state and st.session_state.run_optimization:
+    if st.session_state.run_optimization:
         try:
             with st.spinner("Calculating optimal resource allocation..."):
                 merged_df = optimize_resources(merged_df)
@@ -954,18 +982,21 @@ elif display_option == "🎯 Optimization":
             st.markdown("### 🎯 Top Priority Districts")
             priority_districts = merged_df.nlargest(10, 'priority_score')
             
-            fig = px.bar(
-                priority_districts,
-                x='district',
-                y='priority_score',
-                color='state',
-                title="Top 10 Priority Districts",
-                labels={'priority_score': 'Priority Score (0-100)'},
-                hover_data=['resource_gap', 'total_bio_updates'],
-                color_discrete_sequence=px.colors.sequential.Reds_r
-            )
-            fig.update_layout(height=500, xaxis_tickangle=-45)
-            st.plotly_chart(fig, use_container_width=True)
+            if not priority_districts.empty:
+                fig = px.bar(
+                    priority_districts,
+                    x='district',
+                    y='priority_score',
+                    color='state',
+                    title="Top 10 Priority Districts",
+                    labels={'priority_score': 'Priority Score (0-100)'},
+                    hover_data=['resource_gap', 'total_bio_updates'],
+                    color_discrete_sequence=px.colors.sequential.Reds_r
+                )
+                fig.update_layout(height=500, xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No priority districts found")
             
             # State-level recommendations
             st.markdown("### 🏛️ State-Level Recommendations")
@@ -976,15 +1007,18 @@ elif display_option == "🎯 Optimization":
             }).nlargest(5, 'resource_gap').round(0)
             state_recs.columns = ['Total Resource Gap', 'Avg Priority Score', 'District Count']
             
-            # Display as metrics
-            cols = st.columns(len(state_recs))
-            for idx, (state, row) in enumerate(state_recs.iterrows()):
-                with cols[idx]:
-                    st.metric(
-                        label=state,
-                        value=f"{int(row['Total Resource Gap']):,}",
-                        delta=f"Priority: {int(row['Avg Priority Score'])}"
-                    )
+            if not state_recs.empty:
+                # Display as metrics
+                cols = st.columns(len(state_recs))
+                for idx, (state, row) in enumerate(state_recs.iterrows()):
+                    with cols[idx]:
+                        st.metric(
+                            label=state,
+                            value=f"{int(row['Total Resource Gap']):,}",
+                            delta=f"Priority: {int(row['Avg Priority Score'])}"
+                        )
+            else:
+                st.info("No state-level recommendations available")
             
             # Export section
             st.markdown("### 💾 Export Recommendations")
@@ -993,6 +1027,7 @@ elif display_option == "🎯 Optimization":
             with col1:
                 if st.button("📋 Generate Report", use_container_width=True):
                     recommendations = merged_df[['state', 'district', 'priority_score', 'resource_gap']].sort_values('priority_score', ascending=False)
+                    os.makedirs('data/processed', exist_ok=True)
                     recommendations.to_csv('data/processed/resource_recommendations.csv', index=False)
                     st.success("✅ Recommendations exported!")
             
@@ -1041,12 +1076,15 @@ with tab2:
         top_n = st.slider("Number of states to show:", 5, 20, 10)
         state_perf = merged_df.groupby('state')['total_activities'].sum().nlargest(top_n)
         
-        fig = px.bar(state_perf, x=state_perf.values, y=state_perf.index, orientation='h',
-                     title=f"Top {top_n} States by Total Activities",
-                     labels={'x': 'Total Activities', 'y': 'State'},
-                     color=state_perf.values,
-                     color_continuous_scale='Blues')
-        st.plotly_chart(fig, use_container_width=True)
+        if not state_perf.empty:
+            fig = px.bar(state_perf, x=state_perf.values, y=state_perf.index, orientation='h',
+                         title=f"Top {top_n} States by Total Activities",
+                         labels={'x': 'Total Activities', 'y': 'State'},
+                         color=state_perf.values,
+                         color_continuous_scale='Blues')
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No state performance data available")
     
     elif viz_type == "Yearly Trends":
         yearly_data = merged_df.groupby('year').agg({
@@ -1055,11 +1093,14 @@ with tab2:
             'total_demo_updates': 'sum'
         }).reset_index()
         
-        fig = px.line(yearly_data, x='year', y=['total_enrollment', 'total_bio_updates', 'total_demo_updates'],
-                     title="Yearly Trends",
-                     labels={'value': 'Count', 'variable': 'Activity Type'},
-                     markers=True)
-        st.plotly_chart(fig, use_container_width=True)
+        if not yearly_data.empty:
+            fig = px.line(yearly_data, x='year', y=['total_enrollment', 'total_bio_updates', 'total_demo_updates'],
+                         title="Yearly Trends",
+                         labels={'value': 'Count', 'variable': 'Activity Type'},
+                         markers=True)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No yearly trend data available")
 
 with tab3:
     st.markdown("### 📊 Data Statistics")
@@ -1070,7 +1111,10 @@ with tab3:
         st.write(f"**Total Records:** {len(merged_df):,}")
         st.write(f"**Total States:** {merged_df['state'].nunique()}")
         st.write(f"**Total Districts:** {merged_df['district'].nunique()}")
-        st.write(f"**Years Covered:** {merged_df['year'].min()} - {merged_df['year'].max()}")
+        if 'year' in merged_df.columns and not merged_df['year'].empty:
+            st.write(f"**Years Covered:** {merged_df['year'].min()} - {merged_df['year'].max()}")
+        else:
+            st.write("**Years Covered:** N/A")
         st.write(f"**Memory Usage:** {merged_df.memory_usage(deep=True).sum() / 1024**2:.2f} MB")
     
     with col2:
@@ -1078,8 +1122,10 @@ with tab3:
         st.write(f"**Total Enrollment:** {merged_df['total_enrollment'].sum():,.0f}")
         st.write(f"**Total Bio Updates:** {merged_df['total_bio_updates'].sum():,.0f}")
         st.write(f"**Total Demo Updates:** {merged_df['total_demo_updates'].sum():,.0f}")
-        st.write(f"**Avg Update Ratio:** {merged_df['update_ratio'].mean():.2f}")
-        st.write(f"**Max Update Ratio:** {merged_df['update_ratio'].max():.2f}")
+        if 'update_ratio' in merged_df.columns:
+            st.write(f"**Avg Update Ratio:** {merged_df['update_ratio'].mean():.2f}")
+        else:
+            st.write("**Avg Update Ratio:** N/A")
     
     # Numerical statistics
     st.markdown("#### Numerical Statistics")
@@ -1087,6 +1133,8 @@ with tab3:
     if numeric_cols:
         stats_df = merged_df[numeric_cols].describe().T
         st.dataframe(stats_df, use_container_width=True)
+    else:
+        st.info("No numerical columns available for statistics")
 
 with tab4:
     st.markdown("### 💾 Export Options")
@@ -1143,23 +1191,23 @@ with tab4:
     if st.button("Generate Report", type="primary", use_container_width=True):
         with st.spinner("Generating report..."):
             report = f"""
-            # UIDAI Analytics Report
-            **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-            **Report Type:** {report_type}
-            
-            ## Executive Summary
-            - **Total Records Analyzed:** {len(merged_df):,}
-            - **Time Period:** {merged_df['year'].min()} - {merged_df['year'].max()}
-            - **Geographical Coverage:** {merged_df['state'].nunique()} states, {merged_df['district'].nunique()} districts
-            
-            ## Key Metrics
-            - **Total Enrollment:** {merged_df['total_enrollment'].sum():,.0f}
-            - **Total Biometric Updates:** {merged_df['total_bio_updates'].sum():,.0f}
-            - **Total Demographic Updates:** {merged_df['total_demo_updates'].sum():,.0f}
-            - **Average Update Ratio:** {merged_df['update_ratio'].mean():.2f}
-            
-            ## Top Performing States
-            """
+# UIDAI Analytics Report
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Report Type:** {report_type}
+
+## Executive Summary
+- **Total Records Analyzed:** {len(merged_df):,}
+- **Time Period:** {merged_df['year'].min() if 'year' in merged_df.columns and not merged_df['year'].empty else 'N/A'} - {merged_df['year'].max() if 'year' in merged_df.columns and not merged_df['year'].empty else 'N/A'}
+- **Geographical Coverage:** {merged_df['state'].nunique()} states, {merged_df['district'].nunique()} districts
+
+## Key Metrics
+- **Total Enrollment:** {merged_df['total_enrollment'].sum():,.0f}
+- **Total Biometric Updates:** {merged_df['total_bio_updates'].sum():,.0f}
+- **Total Demographic Updates:** {merged_df['total_demo_updates'].sum():,.0f}
+- **Average Update Ratio:** {merged_df['update_ratio'].mean():.2f if 'update_ratio' in merged_df.columns else 'N/A'}
+
+## Top Performing States
+"""
             
             # Add top states
             top_states = merged_df.groupby('state')['total_activities'].sum().nlargest(5)
