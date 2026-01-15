@@ -485,7 +485,7 @@ with st.sidebar:
     # Logo with better styling
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.image("src/aadharimage/Aadhaar_Logo.jpeg", 
+        st.image("src/aadharimage.jpeg", 
                  width=120)
     
     st.divider()
