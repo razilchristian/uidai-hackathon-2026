@@ -766,35 +766,178 @@ if display_option == "📊 Overview":
         
         st.plotly_chart(fig2, use_container_width=True)
     
-    # Top states horizontal bar chart
-    st.markdown("## 🏆 Top Performing States")
+    # Top states visualizations for all categories
+    st.markdown("## 🏆 Top Performing States by Category")
     
-    top_states = merged_df.groupby('state')['total_bio_updates'].sum().nlargest(10)
+    # Create tabs for different categories
+    top_tab1, top_tab2, top_tab3 = st.tabs(["📊 Enrollment", "👥 Demographic Updates", "🆔 Biometric Updates"])
     
-    if not top_states.empty:
-        fig3 = go.Figure(go.Bar(
-            x=top_states.values,
-            y=top_states.index,
-            orientation='h',
-            marker_color='#1E3A8A',
-            text=[f"{x:,.0f}" for x in top_states.values],
-            textposition='outside',
-            hovertemplate='<b>%{y}</b><br>Updates: %{x:,}<extra></extra>'
-        ))
+    with top_tab1:
+        st.markdown("### 📊 Top 10 States by Enrollment")
+        top_enrollment_states = merged_df.groupby('state')['total_enrollment'].sum().nlargest(10)
         
-        fig3.update_layout(
-            title="Top 10 States by Biometric Updates",
-            xaxis_title="Number of Updates",
-            yaxis_title="State",
+        if not top_enrollment_states.empty:
+            fig_enrollment = go.Figure(go.Bar(
+                x=top_enrollment_states.values,
+                y=top_enrollment_states.index,
+                orientation='h',
+                marker_color='#1E3A8A',
+                text=[f"{x:,.0f}" for x in top_enrollment_states.values],
+                textposition='outside',
+                hovertemplate='<b>%{y}</b><br>Enrollments: %{x:,}<extra></extra>'
+            ))
+            
+            fig_enrollment.update_layout(
+                title="Top 10 States by Enrollment",
+                xaxis_title="Number of Enrollments",
+                yaxis_title="State",
+                height=500,
+                margin=dict(t=50, b=20, l=20, r=20),
+                plot_bgcolor='rgba(0,0,0,0)',
+                yaxis={'categoryorder': 'total ascending'}
+            )
+            
+            st.plotly_chart(fig_enrollment, use_container_width=True)
+            
+            # Display data table
+            st.markdown("#### 📋 Enrollment Data")
+            enrollment_table = pd.DataFrame({
+                'State': top_enrollment_states.index,
+                'Enrollments': top_enrollment_states.values,
+                'Percentage': (top_enrollment_states.values / top_enrollment_states.values.sum() * 100).round(1)
+            })
+            st.dataframe(enrollment_table, use_container_width=True)
+        else:
+            st.info("No enrollment data available for visualization")
+    
+    with top_tab2:
+        st.markdown("### 👥 Top 10 States by Demographic Updates")
+        top_demo_states = merged_df.groupby('state')['total_demo_updates'].sum().nlargest(10)
+        
+        if not top_demo_states.empty:
+            fig_demo = go.Figure(go.Bar(
+                x=top_demo_states.values,
+                y=top_demo_states.index,
+                orientation='h',
+                marker_color='#3B82F6',
+                text=[f"{x:,.0f}" for x in top_demo_states.values],
+                textposition='outside',
+                hovertemplate='<b>%{y}</b><br>Demographic Updates: %{x:,}<extra></extra>'
+            ))
+            
+            fig_demo.update_layout(
+                title="Top 10 States by Demographic Updates",
+                xaxis_title="Number of Demographic Updates",
+                yaxis_title="State",
+                height=500,
+                margin=dict(t=50, b=20, l=20, r=20),
+                plot_bgcolor='rgba(0,0,0,0)',
+                yaxis={'categoryorder': 'total ascending'}
+            )
+            
+            st.plotly_chart(fig_demo, use_container_width=True)
+            
+            # Display data table
+            st.markdown("#### 📋 Demographic Update Data")
+            demo_table = pd.DataFrame({
+                'State': top_demo_states.index,
+                'Demographic Updates': top_demo_states.values,
+                'Percentage': (top_demo_states.values / top_demo_states.values.sum() * 100).round(1)
+            })
+            st.dataframe(demo_table, use_container_width=True)
+        else:
+            st.info("No demographic update data available for visualization")
+    
+    with top_tab3:
+        st.markdown("### 🆔 Top 10 States by Biometric Updates")
+        top_bio_states = merged_df.groupby('state')['total_bio_updates'].sum().nlargest(10)
+        
+        if not top_bio_states.empty:
+            fig_bio = go.Figure(go.Bar(
+                x=top_bio_states.values,
+                y=top_bio_states.index,
+                orientation='h',
+                marker_color='#10B981',
+                text=[f"{x:,.0f}" for x in top_bio_states.values],
+                textposition='outside',
+                hovertemplate='<b>%{y}</b><br>Biometric Updates: %{x:,}<extra></extra>'
+            ))
+            
+            fig_bio.update_layout(
+                title="Top 10 States by Biometric Updates",
+                xaxis_title="Number of Biometric Updates",
+                yaxis_title="State",
+                height=500,
+                margin=dict(t=50, b=20, l=20, r=20),
+                plot_bgcolor='rgba(0,0,0,0)',
+                yaxis={'categoryorder': 'total ascending'}
+            )
+            
+            st.plotly_chart(fig_bio, use_container_width=True)
+            
+            # Display data table
+            st.markdown("#### 📋 Biometric Update Data")
+            bio_table = pd.DataFrame({
+                'State': top_bio_states.index,
+                'Biometric Updates': top_bio_states.values,
+                'Percentage': (top_bio_states.values / top_bio_states.values.sum() * 100).round(1)
+            })
+            st.dataframe(bio_table, use_container_width=True)
+        else:
+            st.info("No biometric update data available for visualization")
+    
+    # Comparison chart of all three categories
+    st.markdown("## 📊 State-wise Comparison")
+    
+    # Get top 5 states from each category
+    top_5_enrollment = merged_df.groupby('state')['total_enrollment'].sum().nlargest(5)
+    top_5_demo = merged_df.groupby('state')['total_demo_updates'].sum().nlargest(5)
+    top_5_bio = merged_df.groupby('state')['total_bio_updates'].sum().nlargest(5)
+    
+    # Combine all unique states
+    all_top_states = set(list(top_5_enrollment.index) + list(top_5_demo.index) + list(top_5_bio.index))
+    
+    if all_top_states:
+        comparison_data = []
+        for state in all_top_states:
+            enrollment_val = merged_df[merged_df['state'] == state]['total_enrollment'].sum()
+            demo_val = merged_df[merged_df['state'] == state]['total_demo_updates'].sum()
+            bio_val = merged_df[merged_df['state'] == state]['total_bio_updates'].sum()
+            comparison_data.append({
+                'State': state,
+                'Enrollment': enrollment_val,
+                'Demographic Updates': demo_val,
+                'Biometric Updates': bio_val
+            })
+        
+        comparison_df = pd.DataFrame(comparison_data)
+        
+        # Melt for grouped bar chart
+        comparison_melted = comparison_df.melt(id_vars='State', 
+                                              var_name='Category', 
+                                              value_name='Count')
+        
+        fig_comparison = px.bar(comparison_melted, 
+                               x='State', 
+                               y='Count', 
+                               color='Category',
+                               barmode='group',
+                               title="Top States Comparison Across Categories",
+                               color_discrete_map={
+                                   'Enrollment': '#1E3A8A',
+                                   'Demographic Updates': '#3B82F6',
+                                   'Biometric Updates': '#10B981'
+                               })
+        
+        fig_comparison.update_layout(
             height=500,
-            margin=dict(t=50, b=20, l=20, r=20),
-            plot_bgcolor='rgba(0,0,0,0)',
-            yaxis={'categoryorder': 'total ascending'}
+            xaxis_tickangle=-45,
+            margin=dict(t=50, b=100, l=20, r=20)
         )
         
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig_comparison, use_container_width=True)
     else:
-        st.info("No state data available for visualization")
+        st.info("Insufficient data for state comparison")
 
 elif display_option == "📈 Forecasting":
     st.markdown("## 📈 Biometric Update Forecast")
@@ -1209,10 +1352,22 @@ with tab4:
 ## Top Performing States
 """
             
-            # Add top states
-            top_states = merged_df.groupby('state')['total_activities'].sum().nlargest(5)
-            for state, count in top_states.items():
-                report += f"- {state}: {count:,.0f} activities\n"
+            # Add top states for each category
+            top_enrollment = merged_df.groupby('state')['total_enrollment'].sum().nlargest(3)
+            top_demo = merged_df.groupby('state')['total_demo_updates'].sum().nlargest(3)
+            top_bio = merged_df.groupby('state')['total_bio_updates'].sum().nlargest(3)
+            
+            report += "\n### Top 3 Enrollment States:\n"
+            for state, count in top_enrollment.items():
+                report += f"- {state}: {count:,.0f} enrollments\n"
+            
+            report += "\n### Top 3 Demographic Update States:\n"
+            for state, count in top_demo.items():
+                report += f"- {state}: {count:,.0f} updates\n"
+            
+            report += "\n### Top 3 Biometric Update States:\n"
+            for state, count in top_bio.items():
+                report += f"- {state}: {count:,.0f} updates\n"
             
             report += "\n## Data Quality\n"
             report += f"- **Missing Values:** {merged_df.isnull().sum().sum()}\n"
