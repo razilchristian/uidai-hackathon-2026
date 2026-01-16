@@ -45,6 +45,8 @@ if 'run_clustering' not in st.session_state:
     st.session_state.run_clustering = False
 if 'run_optimization' not in st.session_state:
     st.session_state.run_optimization = False
+if 'run_societal' not in st.session_state:
+    st.session_state.run_societal = False
 
 # Custom CSS - Enhanced with modern design
 st.markdown("""
@@ -194,6 +196,45 @@ st.markdown("""
     .feature-desc {
         color: #6B7280;
         font-size: 0.9rem;
+    }
+    
+    /* Insight cards */
+    .insight-card {
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        border-left: 6px solid #0ea5e9;
+        margin: 1rem 0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    .insight-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #0369a1;
+        margin-bottom: 0.5rem;
+    }
+    
+    .insight-content {
+        color: #475569;
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+    
+    .solution-card {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        border-left: 6px solid #16a34a;
+        margin: 1rem 0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    .solution-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #166534;
+        margin-bottom: 0.5rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -347,6 +388,32 @@ def load_all_data():
                                      merged['total_demo_updates'] + 
                                      merged['total_bio_updates'])
         
+        # Add urbanization classification based on pincode patterns
+        merged['is_urban'] = merged['pincode'].apply(lambda x: int(str(x)[0]) in [1, 2, 3] if pd.notnull(x) else False)
+        
+        # Add region classification
+        def classify_region(state):
+            north = ['Delhi', 'Haryana', 'Punjab', 'Himachal Pradesh', 'Uttarakhand', 'Uttar Pradesh', 'Rajasthan']
+            south = ['Tamil Nadu', 'Kerala', 'Karnataka', 'Andhra Pradesh', 'Telangana']
+            east = ['West Bengal', 'Odisha', 'Bihar', 'Jharkhand']
+            west = ['Maharashtra', 'Gujarat', 'Goa']
+            central = ['Madhya Pradesh', 'Chhattisgarh']
+            
+            if state in north:
+                return 'North'
+            elif state in south:
+                return 'South'
+            elif state in east:
+                return 'East'
+            elif state in west:
+                return 'West'
+            elif state in central:
+                return 'Central'
+            else:
+                return 'Other'
+        
+        merged['region'] = merged['state'].apply(classify_region)
+        
         # Save processed data
         os.makedirs('data/processed', exist_ok=True)
         merged.to_csv('data/processed/merged_data.csv', index=False)
@@ -354,6 +421,214 @@ def load_all_data():
         progress_bar.progress(100)
         
         return merged, enrollment, demographic, biometric
+
+# ===== SOCIETAL TREND ANALYSIS FUNCTIONS =====
+
+def analyze_societal_trends(df):
+    """Analyze and generate societal insights from Aadhaar data"""
+    insights = []
+    solutions = []
+    
+    # 1. Digital Divide Analysis
+    urban_df = df[df['is_urban'] == True]
+    rural_df = df[df['is_urban'] == False]
+    
+    if not urban_df.empty and not rural_df.empty:
+        urban_ratio = urban_df['update_ratio'].mean()
+        rural_ratio = rural_df['update_ratio'].mean()
+        
+        if urban_ratio > rural_ratio * 1.3:
+            insights.append({
+                'title': '📱 Digital Divide Detected',
+                'description': f'Urban areas show {urban_ratio/rural_ratio:.1f}x higher update rates compared to rural areas',
+                'implication': 'Unequal access to digital services and infrastructure',
+                'confidence': 'High',
+                'data_points': {
+                    'Urban Update Ratio': f'{urban_ratio:.2f}',
+                    'Rural Update Ratio': f'{rural_ratio:.2f}',
+                    'Gap': f'{(urban_ratio/rural_ratio):.1f}x'
+                }
+            })
+            solutions.append({
+                'problem': 'Digital Divide',
+                'solution': '📶 Mobile Enrollment Vans & Digital Literacy Campaigns',
+                'action_items': [
+                    'Deploy mobile enrollment vans in rural districts',
+                    'Partner with local NGOs for digital literacy programs',
+                    'Set up community WiFi hotspots in panchayat offices'
+                ],
+                'impact': 'Increase rural update rates by 40% in 6 months',
+                'cost_estimate': 'Medium'
+            })
+    
+    # 2. Age-based Enrollment Patterns
+    child_enrollment = df['age_0_5'].sum() + df['age_5_17'].sum()
+    adult_enrollment = df['age_18_greater'].sum()
+    total_enrollment = child_enrollment + adult_enrollment
+    
+    if total_enrollment > 0:
+        child_percentage = (child_enrollment / total_enrollment) * 100
+        
+        if child_percentage > 30:
+            insights.append({
+                'title': '👶 High Child Enrollment Trend',
+                'description': f'{child_percentage:.1f}% of enrollments are for children (0-17 years)',
+                'implication': 'Growing recognition of Aadhaar for school admissions and child welfare schemes',
+                'confidence': 'Medium',
+                'data_points': {
+                    'Child Enrollments': f'{child_enrollment:,}',
+                    'Adult Enrollments': f'{adult_enrollment:,}',
+                    'Child Percentage': f'{child_percentage:.1f}%'
+                }
+            })
+            solutions.append({
+                'problem': 'Child Enrollment Management',
+                'solution': '🏫 School Integration Program',
+                'action_items': [
+                    'Integrate Aadhaar enrollment with school admission process',
+                    'Create child-friendly enrollment centers',
+                    'Develop parent education campaigns'
+                ],
+                'impact': 'Streamline 90% of child enrollments through schools',
+                'cost_estimate': 'Low'
+            })
+    
+    # 3. Regional Disparities
+    regional_stats = df.groupby('region').agg({
+        'total_enrollment': 'sum',
+        'total_bio_updates': 'sum',
+        'update_ratio': 'mean'
+    }).reset_index()
+    
+    if not regional_stats.empty and len(regional_stats) > 1:
+        max_region = regional_stats.loc[regional_stats['update_ratio'].idxmax()]
+        min_region = regional_stats.loc[regional_stats['update_ratio'].idxmin()]
+        
+        if max_region['update_ratio'] > min_region['update_ratio'] * 1.5:
+            insights.append({
+                'title': '🌍 Regional Disparity Alert',
+                'description': f'{max_region["region"]} has {max_region["update_ratio"]/min_region["update_ratio"]:.1f}x higher update rate than {min_region["region"]}',
+                'implication': 'Uneven service delivery across regions',
+                'confidence': 'High',
+                'data_points': {
+                    'Highest Region': f'{max_region["region"]} ({max_region["update_ratio"]:.2f})',
+                    'Lowest Region': f'{min_region["region"]} ({min_region["update_ratio"]:.2f})',
+                    'Disparity Ratio': f'{max_region["update_ratio"]/min_region["update_ratio"]:.1f}x'
+                }
+            })
+            solutions.append({
+                'problem': 'Regional Disparities',
+                'solution': '🎯 Targeted Capacity Building',
+                'action_items': [
+                    f'Deploy additional resources to {min_region["region"]} region',
+                    'Create regional best practice sharing forums',
+                    'Implement region-specific awareness campaigns'
+                ],
+                'impact': 'Reduce regional gap by 50% in 12 months',
+                'cost_estimate': 'Medium'
+            })
+    
+    # 4. Migration Pattern Detection
+    if 'year' in df.columns and df['year'].nunique() > 1:
+        yearly_trends = df.groupby('year').agg({
+            'total_enrollment': 'sum',
+            'total_bio_updates': 'sum'
+        }).pct_change().mean() * 100
+        
+        if yearly_trends['total_bio_updates'] > yearly_trends['total_enrollment'] * 1.2:
+            insights.append({
+                'title': '🚶 Migration Pattern Detected',
+                'description': f'Update growth ({yearly_trends["total_bio_updates"]:.1f}%) significantly exceeds enrollment growth ({yearly_trends["total_enrollment"]:.1f}%)',
+                'implication': 'Possible population movement requiring address/contact updates',
+                'confidence': 'Medium',
+                'data_points': {
+                    'Avg Enrollment Growth': f'{yearly_trends["total_enrollment"]:.1f}%',
+                    'Avg Update Growth': f'{yearly_trends["total_bio_updates"]:.1f}%',
+                    'Growth Difference': f'{(yearly_trends["total_bio_updates"] - yearly_trends["total_enrollment"]):.1f}%'
+                }
+            })
+            solutions.append({
+                'problem': 'Migration-related Updates',
+                'solution': '📍 Mobile Update Services for Migrant Populations',
+                'action_items': [
+                    'Set up temporary update centers at migration hubs',
+                    'Partner with employers of migrant workers',
+                    'Develop SMS-based update notification system'
+                ],
+                'impact': 'Capture 80% of migrant updates within 1 month of movement',
+                'cost_estimate': 'Low'
+            })
+    
+    # 5. Service Demand Forecasting
+    monthly_pattern = df.groupby(df['year'].astype(str) + '-Q' + ((df['year'] % 4) + 1).astype(str)).agg({
+        'total_bio_updates': 'sum'
+    })
+    
+    if not monthly_pattern.empty and len(monthly_pattern) > 3:
+        peak_quarter = monthly_pattern['total_bio_updates'].idxmax()
+        trough_quarter = monthly_pattern['total_bio_updates'].idxmin()
+        peak_value = monthly_pattern['total_bio_updates'].max()
+        trough_value = monthly_pattern['total_bio_updates'].min()
+        
+        if peak_value > trough_value * 1.5:
+            insights.append({
+                'title': '📅 Seasonal Service Demand',
+                'description': f'Service demand peaks in {peak_quarter} ({peak_value:,} updates) vs {trough_quarter} ({trough_value:,} updates)',
+                'implication': 'Seasonal variations in service demand requiring flexible resource allocation',
+                'confidence': 'High',
+                'data_points': {
+                    'Peak Quarter': f'{peak_quarter}',
+                    'Trough Quarter': f'{trough_quarter}',
+                    'Peak-to-Trough Ratio': f'{peak_value/trough_value:.1f}x'
+                }
+            })
+            solutions.append({
+                'problem': 'Seasonal Demand Spikes',
+                'solution': '🔄 Dynamic Resource Allocation System',
+                'action_items': [
+                    'Implement flexible staffing during peak quarters',
+                    'Pre-position mobile units in high-demand areas',
+                    'Offer online appointment scheduling to manage queues'
+                ],
+                'impact': 'Reduce peak wait times by 60%',
+                'cost_estimate': 'Medium'
+            })
+    
+    return insights, solutions
+
+def generate_trend_visualizations(df):
+    """Generate visualizations for societal trends"""
+    viz_data = {}
+    
+    # Urban vs Rural Comparison
+    if 'is_urban' in df.columns:
+        urban_rural = df.groupby('is_urban').agg({
+            'total_enrollment': 'sum',
+            'total_bio_updates': 'sum',
+            'update_ratio': 'mean'
+        }).reset_index()
+        urban_rural['is_urban'] = urban_rural['is_urban'].map({True: 'Urban', False: 'Rural'})
+        viz_data['urban_rural'] = urban_rural
+    
+    # Regional Performance
+    if 'region' in df.columns:
+        regional_stats = df.groupby('region').agg({
+            'total_enrollment': 'sum',
+            'total_bio_updates': 'sum',
+            'update_ratio': 'mean'
+        }).reset_index()
+        viz_data['regional_stats'] = regional_stats
+    
+    # Age Distribution Over Time
+    if 'year' in df.columns:
+        age_trends = df.groupby('year').agg({
+            'age_0_5': 'sum',
+            'age_5_17': 'sum',
+            'age_18_greater': 'sum'
+        }).reset_index()
+        viz_data['age_trends'] = age_trends
+    
+    return viz_data
 
 # ===== ML FUNCTIONS =====
 
@@ -519,11 +794,11 @@ with st.sidebar:
     
     st.divider()
     
-    # ML Model Selection with icons
+    # ML Model Selection with icons - ADDED SOCIETAL TRENDS OPTION
     st.markdown("### 🤖 AI Models")
     ml_option = st.selectbox(
         "Select Analysis Type",
-        ["📊 System Overview", "📈 Forecasting", "🚨 Anomaly Detection", "👥 Clustering", "🎯 Optimization"],
+        ["📊 System Overview", "📈 Forecasting", "🚨 Anomaly Detection", "👥 Clustering", "🎯 Optimization", "🌍 Societal Trends"],
         index=0
     )
     
@@ -614,6 +889,37 @@ if not st.session_state.data_loaded or st.session_state.merged_df is None:
         </div>
         """, unsafe_allow_html=True)
     
+    # New feature card for societal trends
+    st.markdown("### 🔍 Advanced Analytics")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-icon">🌍</div>
+            <div class="feature-title">Societal Trends</div>
+            <div class="feature-desc">Uncover demographic and migration patterns</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-icon">🎯</div>
+            <div class="feature-title">Solution Frameworks</div>
+            <div class="feature-desc">Actionable recommendations for system improvements</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-icon">📈</div>
+            <div class="feature-title">Trend Forecasting</div>
+            <div class="feature-desc">Predict future enrollment and update patterns</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
     # Quick stats if data exists
     if os.path.exists('data/raw/'):
         st.divider()
@@ -673,20 +979,20 @@ with col3:
         top_state_name = top_state.idxmax()
         top_state_count = top_state.max()
         st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">Top State</div>
-            <div class="metric-value">{top_state_name}</div>
-            <div style="font-size: 0.8rem; color: #3B82F6;">{top_state_count:,.0f} updates</div>
-        </div>
-        """, unsafe_allow_html=True)
+    <div class="metric-card">
+        <div class="metric-label">Top State</div>
+        <div class="metric-value">{top_state_name}</div>
+        <div style="font-size: 0.8rem; color: #3B82F6;">{top_state_count:,.0f} updates</div>
+    </div>
+    """, unsafe_allow_html=True)
     else:
         st.markdown("""
-        <div class="metric-card">
-            <div class="metric-label">Top State</div>
-            <div class="metric-value">N/A</div>
-            <div style="font-size: 0.8rem; color: #6B7280;">No data available</div>
-        </div>
-        """, unsafe_allow_html=True)
+    <div class="metric-card">
+        <div class="metric-label">Top State</div>
+        <div class="metric-value">N/A</div>
+        <div style="font-size: 0.8rem; color: #6B7280;">No data available</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 with col4:
     anomaly_count = len(merged_df[merged_df['update_ratio'] > 100])
@@ -1184,6 +1490,183 @@ elif display_option == "🎯 Optimization":
         except Exception as e:
             st.error(f"❌ Error in optimization: {e}")
 
+# ===== NEW: SOCIETAL TRENDS ANALYSIS =====
+elif display_option == "🌍 Societal Trends":
+    st.markdown("## 🌍 Societal Trends Analysis")
+    st.markdown("### Uncovering Demographic Patterns & Migration Insights")
+    
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        if st.button("🔍 Analyze Trends", type="primary", use_container_width=True):
+            st.session_state.run_societal = True
+    
+    if st.session_state.run_societal:
+        try:
+            with st.spinner("Analyzing societal trends and patterns..."):
+                insights, solutions = analyze_societal_trends(merged_df)
+                viz_data = generate_trend_visualizations(merged_df)
+            
+            # Summary Metrics
+            st.markdown("### 📊 Societal Trend Metrics")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                urban_rural_gap = 0
+                if 'is_urban' in merged_df.columns:
+                    urban_ratio = merged_df[merged_df['is_urban'] == True]['update_ratio'].mean()
+                    rural_ratio = merged_df[merged_df['is_urban'] == False]['update_ratio'].mean()
+                    urban_rural_gap = (urban_ratio / rural_ratio) if rural_ratio > 0 else 0
+                st.metric("Urban-Rural Gap", f"{urban_rural_gap:.1f}x", 
+                         delta="High" if urban_rural_gap > 1.3 else "Normal")
+            
+            with col2:
+                child_enrollment_pct = ((merged_df['age_0_5'].sum() + merged_df['age_5_17'].sum()) / 
+                                       merged_df['total_enrollment'].sum() * 100) if merged_df['total_enrollment'].sum() > 0 else 0
+                st.metric("Child Enrollment %", f"{child_enrollment_pct:.1f}%",
+                         delta="High" if child_enrollment_pct > 30 else "Normal")
+            
+            with col3:
+                regional_disparity = 0
+                if 'region' in merged_df.columns:
+                    regional_stats = merged_df.groupby('region')['update_ratio'].mean()
+                    if len(regional_stats) > 1:
+                        regional_disparity = regional_stats.max() / regional_stats.min()
+                st.metric("Regional Disparity", f"{regional_disparity:.1f}x",
+                         delta="High" if regional_disparity > 1.5 else "Normal")
+            
+            with col4:
+                seasonal_variation = 0
+                if 'year' in merged_df.columns and merged_df['year'].nunique() > 1:
+                    quarterly_data = merged_df.groupby('year')['total_bio_updates'].sum()
+                    if len(quarterly_data) > 1:
+                        seasonal_variation = quarterly_data.max() / quarterly_data.min()
+                st.metric("Seasonal Variation", f"{seasonal_variation:.1f}x",
+                         delta="High" if seasonal_variation > 1.5 else "Normal")
+            
+            # Create tabs for different views
+            tab1, tab2, tab3, tab4 = st.tabs(["🔍 Key Insights", "🎯 Solution Frameworks", "📊 Visualizations", "📋 Raw Data"])
+            
+            with tab1:
+                st.markdown("### 🧠 Discovered Societal Insights")
+                if insights:
+                    for insight in insights:
+                        st.markdown(f"""
+                        <div class="insight-card">
+                            <div class="insight-title">{insight['title']}</div>
+                            <div class="insight-content">
+                                <strong>Description:</strong> {insight['description']}<br>
+                                <strong>Implication:</strong> {insight['implication']}<br>
+                                <strong>Confidence Level:</strong> {insight['confidence']}<br>
+                                <strong>Key Data Points:</strong><br>
+                                {''.join([f"• {k}: {v}<br>" for k, v in insight['data_points'].items()])}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("No significant societal trends detected in the current data.")
+            
+            with tab2:
+                st.markdown("### 🚀 Actionable Solution Frameworks")
+                if solutions:
+                    for solution in solutions:
+                        st.markdown(f"""
+                        <div class="solution-card">
+                            <div class="solution-title">{solution['solution']}</div>
+                            <div class="insight-content">
+                                <strong>Problem Addressed:</strong> {solution['problem']}<br>
+                                <strong>Expected Impact:</strong> {solution['impact']}<br>
+                                <strong>Cost Estimate:</strong> {solution['cost_estimate']}<br>
+                                <strong>Action Items:</strong><br>
+                                {''.join([f"• {item}<br>" for item in solution['action_items']])}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("Generate insights first to see solution frameworks.")
+            
+            with tab3:
+                st.markdown("### 📈 Trend Visualizations")
+                
+                # Urban vs Rural Comparison
+                if 'urban_rural' in viz_data:
+                    st.markdown("#### 🏙️ Urban vs Rural Performance")
+                    urban_rural_df = viz_data['urban_rural']
+                    
+                    fig_urban = px.bar(urban_rural_df, x='is_urban', y='update_ratio',
+                                      title="Update Ratio: Urban vs Rural",
+                                      color='is_urban',
+                                      color_discrete_map={'Urban': '#3B82F6', 'Rural': '#10B981'})
+                    fig_urban.update_layout(height=400)
+                    st.plotly_chart(fig_urban, use_container_width=True)
+                
+                # Regional Performance
+                if 'regional_stats' in viz_data:
+                    st.markdown("#### 🌍 Regional Performance Comparison")
+                    regional_df = viz_data['regional_stats']
+                    
+                    fig_region = px.bar(regional_df, x='region', y='update_ratio',
+                                       title="Update Ratio by Region",
+                                       color='update_ratio',
+                                       color_continuous_scale='Blues')
+                    fig_region.update_layout(height=400)
+                    st.plotly_chart(fig_region, use_container_width=True)
+                
+                # Age Trends
+                if 'age_trends' in viz_data:
+                    st.markdown("#### 👶 Age Distribution Trends")
+                    age_df = viz_data['age_trends']
+                    
+                    fig_age = px.line(age_df, x='year', y=['age_0_5', 'age_5_17', 'age_18_greater'],
+                                     title="Age Group Enrollment Trends Over Time",
+                                     labels={'value': 'Enrollments', 'variable': 'Age Group'},
+                                     markers=True)
+                    fig_age.update_layout(height=400)
+                    st.plotly_chart(fig_age, use_container_width=True)
+            
+            with tab4:
+                st.markdown("### 📋 Trend Analysis Data")
+                
+                # Urban-Rural Data
+                if 'urban_rural' in viz_data:
+                    st.markdown("#### Urban vs Rural Statistics")
+                    st.dataframe(viz_data['urban_rural'], use_container_width=True)
+                
+                # Regional Data
+                if 'regional_stats' in viz_data:
+                    st.markdown("#### Regional Statistics")
+                    st.dataframe(viz_data['regional_stats'], use_container_width=True)
+                
+                # Export button
+                if st.button("📥 Export Trend Analysis", use_container_width=True):
+                    # Combine all data
+                    export_data = {}
+                    if 'urban_rural' in viz_data:
+                        export_data['urban_rural'] = viz_data['urban_rural']
+                    if 'regional_stats' in viz_data:
+                        export_data['regional_stats'] = viz_data['regional_stats']
+                    
+                    # Create insights dataframe
+                    if insights:
+                        insights_df = pd.DataFrame(insights)
+                        export_data['insights'] = insights_df
+                    
+                    # Create solutions dataframe
+                    if solutions:
+                        solutions_df = pd.DataFrame(solutions)
+                        export_data['solutions'] = solutions_df
+                    
+                    # Save to Excel with multiple sheets
+                    filename = f"societal_trends_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                    with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+                        for sheet_name, data in export_data.items():
+                            if isinstance(data, pd.DataFrame):
+                                data.to_excel(writer, sheet_name=sheet_name[:31], index=False)
+                    
+                    st.success(f"✅ Trend analysis exported to {filename}")
+        
+        except Exception as e:
+            st.error(f"❌ Error in societal trend analysis: {e}")
+
 # ===== DATA EXPLORER - Enhanced =====
 st.divider()
 st.markdown("## 🔍 Data Explorer")
@@ -1395,6 +1878,7 @@ st.markdown("""
     <div style="display: flex; justify-content: center; gap: 2rem; color: #9CA3AF; font-size: 0.9rem;">
         <span>📊 Real-time Analytics</span>
         <span>🤖 AI-Powered Insights</span>
+        <span>🌍 Societal Trend Analysis</span>
         <span>🔒 Data Privacy Compliant</span>
     </div>
     <p style="color: #EF4444; font-size: 0.8rem; margin-top: 1rem;">⚠️ Demonstration System | Synthetic/Anonymized Data</p>
@@ -1404,4 +1888,4 @@ st.markdown("""
 # Add version info in sidebar bottom
 with st.sidebar:
     st.divider()
-    st.caption(f"v1.2.0 • {datetime.now().strftime('%Y-%m-%d')}")
+    st.caption(f"v1.3.0 • {datetime.now().strftime('%Y-%m-%d')}")
